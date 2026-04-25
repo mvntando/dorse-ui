@@ -1,3 +1,4 @@
+<!-- App.vue -->
 <template>
   <div class="min-h-screen flex items-start justify-center gap-4 p-6">
 
@@ -22,7 +23,7 @@
           :value="fen"
           @keydown.enter="loadFen($event.target.value)"
           :class="['flex-1 text-neutral-300 text-sm py-2 px-2 rounded-lg outline-none border placeholder:text-neutral-600',
-            fenValid ? 'border-gray-500' : 'border-red-400']"
+            fenValid ? 'border-gray-500' : 'border-red-500']"
           @input="fenValid = true"
         />
       </div>
@@ -111,8 +112,10 @@ import 'chessground/assets/chessground.base.css'
 import 'chessground/assets/chessground.brown.css'
 
 import PieceToolbar from '@/components/PieceToolbar.vue'
+import BoardOverlay from '@/components/BoardOverlay.vue'
 
 const boardEl = ref(null)
+const cgContainer = ref(null)
 
 const fen = ref('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1')
 const turnColor = ref('white')
@@ -139,6 +142,8 @@ onMounted(() => {
       change: () => { fen.value = cgToFen() },
     },
   })
+
+  cgContainer.value = boardEl.value.querySelector('cg-container')
 
   // Piece placement
   function keyFromEvent(e) {
@@ -203,15 +208,13 @@ function clearBoard() {
   loadFen('8/8/8/8/8/8/8/8 w - - 0 1')
 }
 
-
 function flipBoard() {
   cg.toggleOrientation()
   flipped.value = !flipped.value
 }
 
-
 function loadFen(input) {
-  // Siple protection mechanism to guard agains invalid fen
+  // Simple protection mechanism to guard agains invalid fen
   const parts = input.trim().split(' ')
   if (parts.length < 4) return fenValid.value = false
 

@@ -2,8 +2,8 @@
 <template>
 
   <div class="w-[525px] bg-neutral-600 rounded-lg flex items-center [&_*]:cursor-pointer">
-    <!-- Ducktape fix: width should be 530px to match the board at the parrent (App.vue).
-    Problem at the parrent with chessground board, its smaller than the set 530px width -->
+    <!-- Ducktape fix: width should be 530px to match the chessground board at the parrent (App.vue).
+    Problem at the chessground board, its smaller than the set 530px width, chessgrounds adds some padding -->
 
     <!-- Hand cursor -->
     <button @click="selectSpecial('hand')"
@@ -19,12 +19,14 @@
       </svg>
     </button>
 
+    <!-- Pieces -->
     <button v-for="role in pieces" :key="role"
       @click="selectPiece(role)"
       @mousedown.prevent="emit('piece-drag', { role, color: props.color }, $event)"
       :class="['flex-1 aspect-square flex items-center justify-center',
         isSelected(role) ? 'bg-gray-700/75' : 'hover:bg-gray-600/75']">
-      <span :class="['piece', role, color, 'block', 'bg-cover', 'size-16']"></span>
+      <!-- <piece> matches chessground's own piece elements, keeping CSS selectors unified -->
+      <piece :class="[role, color, 'block', 'bg-cover', 'size-16']"></piece>
     </button>
 
     <!-- Trash -->

@@ -6,7 +6,13 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   plugins: [
     tailwindcss(),
-    vue(),
+    vue({
+      template: {
+        compilerOptions: {
+          isCustomElement: (tag) => ['piece',].includes(tag)
+        }
+      }
+    })
   ],
   resolve: {
     alias: {
