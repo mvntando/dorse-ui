@@ -6,15 +6,16 @@
     <div class="flex flex-col gap-2">
       
       <!-- Black piece toolbar -->
-      <PieceToolbar :color="flipped ? 'white' : 'black'" :selected-piece="selectedPiece" @piece-selected="onPieceSelected" @piece-drag="onPieceDrag" />
+      <PieceToolbar @piece-selected="onPieceSelected" @piece-drag="onPieceDrag" @tag-selected="onTagSelected" :color="flipped ? 'white' : 'black'" :selected-piece="selectedPiece" :tag-numbers="selectedTags" />
       
       <!-- Board -->
       <div class="relative w-[530px]" style="padding-bottom: 530px; height: 0;">
         <div ref="boardEl" class="absolute inset-0"></div>
+        <BoardOverlay :target="cgContainer" :tag-map="tagMap" @tag-changed="onBoardTagChanged" :flipped="flipped" />
       </div>
       
       <!-- White piece toolbar -->
-      <PieceToolbar :color="flipped ? 'black' : 'white'" :selected-piece="selectedPiece" @piece-selected="onPieceSelected" @piece-drag="onPieceDrag" />
+      <PieceToolbar @piece-selected="onPieceSelected" @piece-drag="onPieceDrag" @tag-selected="onTagSelected" :color="flipped ? 'black' : 'white'" :selected-piece="selectedPiece" :tag-numbers="selectedTags" />
       
       <!-- FEN -->
       <div class="w-[530px] flex items-center gap-2 rounded-lg mt-2">
@@ -71,7 +72,7 @@
         <div class="flex justify-between items-center text-sm text-gray-300">
           <span>En passant</span>
           <select v-model="enPassant" class="text-gray-300 rounded px-2.5 py-1 text-sm outline-none border border-neutral-500 cursor-pointer">
-            <option value="-">-</option>
+            <option>-</option>
             <option>a3</option><option>b3</option><option>c3</option><option>d3</option>
             <option>e3</option><option>f3</option><option>g3</option><option>h3</option>
             <option>a6</option><option>b6</option><option>c6</option><option>d6</option>
@@ -117,11 +118,14 @@ import BoardOverlay from '@/components/BoardOverlay.vue'
 const boardEl = ref(null)
 const cgContainer = ref(null)
 
+const tagMap = ref({})
+
 const fen = ref('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1')
 const turnColor = ref('white')
 const castling = ref({ K: true, Q: true, k: true, q: true })
 const enPassant = ref('-')
 
+const selectedTags = ref({})
 const selectedPiece = ref({ role: 'hand', color: null })
 const flipped = ref(false)
 const fenValid = ref(true)
@@ -140,31 +144,41 @@ onMounted(() => {
     draggable: { enabled: true },
     events: {
       change: () => { fen.value = cgToFen() },
+      move: (orig, dest) => {
+        if (tagMap.value[orig] !== undefined) {
+          tagMap.value[dest] = tagMap.value[orig]
+          delete tagMap.value[orig]
+          tagMap.value = { ...tagMap.value }  // force reactivity since delete doesn't trigger it
+        }
+      }
     },
   })
 
   cgContainer.value = boardEl.value.querySelector('cg-container')
 
-  // Piece placement
-  function keyFromEvent(e) {
-    const bounds = boardEl.value.getBoundingClientRect()
-    const file = Math.floor((e.clientX - bounds.left) / bounds.width  * 8)
-    const rank = Math.floor((e.clientY - bounds.top)  / bounds.height * 8)
-    if (file < 0 || file > 7 || rank < 0 || rank > 7) return null
-    const files = 'abcdefgh'
-    return cg.state.orientation === 'white'
-        ? `${files[file]}${8 - rank}`
-        : `${files[7 - file]}${rank + 1}`
-  }
+  cgContainer.value = boardEl.value.querySelector('cg-container')
 
+  // WebSocket — receive FEN from external source
+  const ws = new WebSocket('ws://localhost:3001')
+  ws.onopen = () => console.log('Connected to position server')
+  ws.onmessage = (e) => loadFen(e.data)
+  ws.onerror = (e) => console.warn('WS error', e)
+  ws.onclose = () => console.log('WS disconnected')
+
+  // Piece and tag placement
   function placePiece(key) {
     const piece = selectedPiece.value
     if (!piece || piece.role === 'hand' || !key) return
     if (piece.role === 'bin') {
-        cg.setPieces(new Map([[key, undefined]]))
+      cg.setPieces(new Map([[key, undefined]]))
+      delete tagMap.value[key]
     } else {
-        cg.setPieces(new Map([[key, { role: piece.role, color: piece.color }]]))
+      cg.setPieces(new Map([[key, { role: piece.role, color: piece.color }]]))
+      const tag = selectedTags.value[`${piece.color}-${piece.role}`] ?? null
+      if (tag && tag !== '-') tagMap.value[key] = tag
+      else delete tagMap.value[key]
     }
+    tagMap.value = { ...tagMap.value }
     fen.value = cgToFen()
   }
 
@@ -176,6 +190,8 @@ onMounted(() => {
     const existing = cg.state.pieces.get(key)
     if (existing && piece && existing.role === piece.role && existing.color === piece.color) {
       cg.setPieces(new Map([[key, undefined]]))
+      delete tagMap.value[key]
+      tagMap.value = { ...tagMap.value }
       fen.value = cgToFen()
     } else {
       placePiece(key)
@@ -190,6 +206,34 @@ onMounted(() => {
 
 })
 
+function keyFromEvent(e) {
+  const bounds = boardEl.value.getBoundingClientRect()
+  const file = Math.floor((e.clientX - bounds.left) / bounds.width  * 8)
+  const rank = Math.floor((e.clientY - bounds.top)  / bounds.height * 8)
+  if (file < 0 || file > 7 || rank < 0 || rank > 7) return null
+  const files = 'abcdefgh'
+  return cg.state.orientation === 'white'
+      ? `${files[file]}${8 - rank}`
+      : `${files[7 - file]}${rank + 1}`
+}
+
+function onPieceDrag(piece, event) {
+  isDraggingFromToolbar = true
+  cg.dragNewPiece({ role: piece.role, color: piece.color }, event, true)
+  document.addEventListener('mouseup', (e) => {
+    isDraggingFromToolbar = false
+    selectedPiece.value = { role: 'hand', color: null }
+    const key = keyFromEvent(e)
+    if (key) {
+      const tag = selectedTags.value[`${piece.color}-${piece.role}`]
+      if (tag && tag !== '-') tagMap.value[key] = tag
+      else delete tagMap.value[key]
+      tagMap.value = { ...tagMap.value }
+    }
+    fen.value = cgToFen()
+  }, { once: true })
+}
+
 watch([turnColor, castling, enPassant], () => {
   fen.value = cgToFen()
 }, { deep: true })
@@ -201,21 +245,28 @@ watch(selectedPiece, (piece) => {
 })
 
 function setStartingPosition() {
+  tagMap.value = {}
   loadFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1')
 }
 
 function clearBoard() {
+  tagMap.value = {}
+  selectedTags.value = {}
   loadFen('8/8/8/8/8/8/8/8 w - - 0 1')
 }
 
 function flipBoard() {
   cg.toggleOrientation()
   flipped.value = !flipped.value
+  cgContainer.value = boardEl.value.querySelector('cg-container')
 }
 
 function loadFen(input) {
+  loadTagFen(input)
+  const cleanInput = input.replace(/\s*\([^)]*\)/, '').trim()
+
   // Simple protection mechanism to guard agains invalid fen
-  const parts = input.trim().split(' ')
+  const parts = cleanInput.split(' ')
   if (parts.length < 4) return fenValid.value = false
 
   const ranks = parts[0].split('/')
@@ -239,25 +290,46 @@ function loadFen(input) {
 }
 
 function cgToFen() {
-    const c = castling.value
-    const castlingStr = [c.K?'K':'', c.Q?'Q':'', c.k?'k':'', c.q?'q':''].join('') || '-'
-    const turn = turnColor.value === 'white' ? 'w' : 'b'
+  const c = castling.value
+  const castlingStr = [c.K?'K':'', c.Q?'Q':'', c.k?'k':'', c.q?'q':''].join('') || '-'
+  const turn = turnColor.value === 'white' ? 'w' : 'b'
 
-    return `${cg.getFen()} ${turn} ${castlingStr} ${enPassant.value} 0 1`
+  return `${cg.getFen()} ${turn} ${castlingStr} ${enPassant.value} 0 1 ${tagsToFenPart()}`
+}
+
+function tagsToFenPart() {
+  const tags = Object.entries(tagMap.value)
+  if (tags.length === 0) return ''
+  return ' (' + tags.map(([sq, num]) => `${sq}:${num}`).join(' ') + ')'
+}
+
+function loadTagFen(input) {
+  const tagMatch = input.match(/\(([^)]+)\)/)
+  if (tagMatch) {
+    const newTagMap = {}
+    for (const entry of tagMatch[1].split(' ')) {
+      const [sq, num] = entry.split(':')
+      if (sq && num) newTagMap[sq] = num
+    }
+    tagMap.value = newTagMap
+  } else {
+    tagMap.value = {}
+  }
 }
 
 function onPieceSelected(piece) {
   selectedPiece.value = piece
 }
 
-function onPieceDrag(piece, event) {
-    isDraggingFromToolbar = true
-    cg.dragNewPiece({ role: piece.role, color: piece.color }, event, true)
-    document.addEventListener('mouseup', () => {
-        isDraggingFromToolbar = false
-        selectedPiece.value = { role: 'hand', color: null }
-        fen.value = cgToFen()
-    }, { once: true })
+function onTagSelected({ role, color, number }) {
+  const key = `${color}-${role}`
+  selectedTags.value[key] = number === '-' ? null : number
 }
 
+function onBoardTagChanged({ square, number }) {
+  if (number === '-') delete tagMap.value[square]
+  else tagMap.value[square] = number
+  tagMap.value = { ...tagMap.value }
+  fen.value = cgToFen()
+}
 </script>

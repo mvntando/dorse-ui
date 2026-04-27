@@ -1,9 +1,9 @@
 <!-- PieceToolbar.vue -->
 <template>
-
   <div class="w-[525px] bg-neutral-600 rounded-lg flex items-center [&_*]:cursor-pointer">
-    <!-- Ducktape fix: width should be 530px to match the chessground board at the parrent (App.vue).
-    Problem at the chessground board, its smaller than the set 530px width, chessgrounds adds some padding -->
+    <!-- Ducktape fix: width should be 530px to match the chessground board at the parrent (App.vue). 
+    Problem at the chessground board, its smaller than the set 530px width, chessgrounds adds some padding 
+    think you can just pass the size of the chessboard from App.vue (for later) -->
 
     <!-- Hand cursor -->
     <button @click="selectSpecial('hand')"
@@ -22,11 +22,30 @@
     <!-- Pieces -->
     <button v-for="role in pieces" :key="role"
       @click="selectPiece(role)"
-      @mousedown.prevent="emit('piece-drag', { role, color: props.color }, $event)"
+      @mousedown.prevent="e => { if (e.target.tagName !== 'SELECT') emit('piece-drag', { role, color: props.color }, e) }"
       :class="['flex-1 aspect-square flex items-center justify-center',
         isSelected(role) ? 'bg-gray-700/75' : 'hover:bg-gray-600/75']">
       <!-- <piece> matches chessground's own piece elements, keeping CSS selectors unified -->
-      <piece :class="[role, color, 'block', 'bg-cover', 'size-16']"></piece>
+      <piece :class="[role, color, 'block', 'bg-cover', 'size-16', 'relative']">
+        <!-- Tag -->
+        <div class="absolute bottom-0 right-0 corner-tag-white">
+          <select :value="props.tagNumbers[`${props.color}-${role}`] ?? '-'"
+          @mousedown.stop @click.stop
+          @change="emit('tag-selected', { role, color: props.color, number: $event.target.value })"
+          class="absolute appearance-none bg-transparent border-none outline-none cursor-pointer font-bold text-xs text-neutral-600 corner-tag-select">
+            <option>-</option>
+            <option>1</option>
+            <option>2</option>
+            <option>3</option>
+            <option>4</option>
+            <option>5</option>
+            <option>6</option>
+            <option>7</option>
+            <option>8</option>
+            <option>9</option>
+          </select>
+        </div>
+      </piece>
     </button>
 
     <!-- Trash -->
@@ -43,10 +62,11 @@
 <script setup>
 const props = defineProps({
   color: { type: String, required: true },
-  selectedPiece: { type: Object, default: null }
+  selectedPiece: { type: Object, default: null },
+  tagNumbers: { type: Object, default: () => ({}) }
 })
 
-const emit = defineEmits(['piece-selected', 'piece-drag'])
+const emit = defineEmits(['piece-selected', 'piece-drag', 'tag-selected'])
 const pieces = ['king', 'queen', 'rook', 'bishop', 'knight', 'pawn']
 
 const isSelected = (role) =>
@@ -62,5 +82,30 @@ function selectSpecial(tool) {
 function selectPiece(role) {
   emit('piece-selected', { role, color: props.color })
 }
-
 </script>
+
+<style scoped>
+.corner-tag {
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 0 24px 24px;
+  border-color: transparent transparent transparent transparent;
+}
+
+.corner-tag-white {
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 0 24px 24px;
+  border-color: transparent transparent rgb(240, 240, 240) transparent;
+}
+
+.corner-tag-select {
+  width: 24px;
+  height: 24px;
+  bottom: -28px;
+  left: -20px;
+  text-align: center;
+}
+</style>
