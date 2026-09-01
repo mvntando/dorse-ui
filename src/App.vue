@@ -158,8 +158,8 @@ onMounted(() => {
 
   cgContainer.value = boardEl.value.querySelector('cg-container')
 
-  // WebSocket — receive FEN from external source
-  const ws = new WebSocket('ws://localhost:3001')
+  // WebSocket - receive FEN from external source
+  const ws = new WebSocket('ws://localhost:3000')
   ws.onopen = () => console.log('Connected to position server')
   ws.onmessage = (e) => loadFen(e.data)
   ws.onerror = (e) => console.warn('WS error', e)
@@ -267,15 +267,24 @@ function loadFen(input) {
 
   // Simple protection mechanism to guard agains invalid fen
   const parts = cleanInput.split(' ')
-  if (parts.length < 4) return fenValid.value = false
+  if (parts.length < 4) {
+    console.warn('Invalid FEN (too few fields):', input)
+    return fenValid.value = false
+  }
 
   const ranks = parts[0].split('/')
-  if (ranks.length !== 8) return fenValid.value = false
+  if (ranks.length !== 8) {
+    console.warn('Invalid FEN (wrong rank count):', input)
+    return fenValid.value = false
+  }
 
   const validPieces = /^[pnbrqkPNBRQK1-8]+$/
   const rankSum = (rank) => [...rank].reduce((sum, c) => sum + (isNaN(c) ? 1 : parseInt(c)), 0)
 
-  if (ranks.some(r => !validPieces.test(r) || rankSum(r) !== 8)) return fenValid.value = false
+  if (ranks.some(r => !validPieces.test(r) || rankSum(r) !== 8)) {
+    console.warn('Invalid FEN (bad piece placement):', input)
+    return fenValid.value = false
+  }
 
   cg.set({ fen: parts[0] })
   turnColor.value = parts[1] === 'b' ? 'black' : 'white'
