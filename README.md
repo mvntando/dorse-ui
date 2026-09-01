@@ -1,5 +1,39 @@
-# Vue 3 + Vite
+# Chess Position Editor
 
-This template should help get you started developing with Vue 3 in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+A web-based board editor for setting up chess positions.
 
-Learn more about IDE Support for Vue in the [Vue Docs Scaling up Guide](https://vuejs.org/guide/scaling-up/tooling.html#ide-support).
+## Features
+
+- Board editor with tags, in style of <a href="https://lichess.org/editor" target="_blank">lichess</a>
+- Tag individual pieces with a number (for tracking specific pieces)
+
+## Tag Notation
+
+Piece tags are appended to the standard FEN as a suffix in parentheses:
+
+```
+rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 (e4:1 d5:2)
+```
+
+Each `square:number` pair assigns a tag to the piece on that square.
+
+## Receiving Positions
+
+The app opens a WebSocket connection to the backend and updates the board whenever a new FEN is pushed to it.
+
+### Sending a position
+
+```
+POST http://localhost:3000/position
+Content-Type: application/json
+
+{ "fen": "<fen string>" }
+```
+
+On success, the server broadcasts the FEN to all connected clients and the board updates.
+
+## Running
+
+- All: `npm run dev:all` (runs both frontend and backend)
+- Frontend: `npm run dev` (Vite, default `http://localhost:5173`)
+- Backend: `node server.js` (HTTP + WebSocket on `http://localhost:3000`)
