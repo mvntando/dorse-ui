@@ -317,7 +317,7 @@ function cgToFen() {
   const castlingStr = [c.K?'K':'', c.Q?'Q':'', c.k?'k':'', c.q?'q':''].join('') || '-'
   const turn = turnColor.value === 'white' ? 'w' : 'b'
 
-  return `${cg.getFen()} ${turn} ${castlingStr} ${enPassant.value} 0 1 ${tagsToFenPart()}`
+  return `${cg.getFen()} ${turn} ${castlingStr} ${enPassant.value} 0 1${tagsToFenPart()}`
 }
 
 function tagsToFenPart() {
